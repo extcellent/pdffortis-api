@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import fitz
+import json
 
 app = FastAPI()
 
@@ -58,25 +59,42 @@ async def extract_text(
     doc.close()
     return {"items": items, "pageWidth": pageWidth, "pageHeight": pageHeight}
 
-@app.post("/edit")
-async def edit_text(
+@app.post("/edit-batch")
+async def edit_batch(
     pdf: UploadFile = File(...),
-    page: int = Form(0),
-    x: float = Form(...),
-    y: float = Form(...),
-    x1: float = Form(...),
-    y1: float = Form(...),
-    old_text: str = Form(...),
-    new_text: str = Form(...),
-    font_size: float = Form(12),
+    edits: str = Form(...),
 ):
     data = await pdf.read()
     doc = fitz.open(stream=data, filetype="pdf")
-    p = doc[page]
-    rect = fitz.Rect(x - 1, y - 1, x1 + 1, y1 + 1)
-    p.draw_rect(rect, color=(1,1,1), fill=(1,1,1))
-    if new_text.strip():
-        p.insert_text((x, y1 - 1), new_text, fontsize=font_size, color=(0,0,0))
+    edits_list = json.loads(edits)
+
+    for edit in edits_list:
+        page_num = edit["page"] - 1
+        p = doc[page_num]
+        x    = float(edit["x"])
+        y    = float(edit["y"])
+        x1   = float(edit["x1"])
+        y1   = float(edit["y1"])
+        size = float(edit.get("size", 12))
+        new_text = edit["newText"]
+
+        rect = fitz.Rect(x, y, x1, y1)
+
+        # Löscht NUR Text-Pixel — Hintergrund, Farben, Bilder bleiben erhalten
+        p.add_redact_annot(rect)
+        p.apply_redactions(
+            images=fitz.PDF_REDACT_IMAGE_NONE,
+            graphics=fitz.PDF_REDACT_LINE_ART_NONE
+        )
+
+        if new_text.strip():
+            p.insert_text(
+                (x, y1 - (y1 - y) * 0.15),
+                new_text,
+                fontsize=size,
+                color=(0, 0, 0)
+            )
+
     buf = doc.tobytes()
     doc.close()
     return Response(content=buf, media_type="application/pdf")

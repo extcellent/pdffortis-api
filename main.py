@@ -53,8 +53,10 @@ async def extract_text(
                     "y1":   span["bbox"][3],
                     "size": span["size"],
                 })
+    pageWidth = p.rect.width
+    pageHeight = p.rect.height
     doc.close()
-    return {"items": items}
+    return {"items": items, "pageWidth": pageWidth, "pageHeight": pageHeight}
 
 @app.post("/edit")
 async def edit_text(

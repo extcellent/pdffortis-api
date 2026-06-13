@@ -48,11 +48,14 @@ async def extract_text(
                     continue
                 items.append({
                     "text": span["text"],
-                    "x":    span["bbox"][0],
-                    "y":    span["bbox"][1],
-                    "x1":   span["bbox"][2],
-                    "y1":   span["bbox"][3],
+                    "x": span["bbox"][0],
+                    "y": span["bbox"][1],
+                    "x1": span["bbox"][2],
+                    "y1": span["bbox"][3],
                     "size": span["size"],
+                    "color": span.get("color", 0),
+                    "font": span.get("font", ""),
+                    "flags": span.get("flags", 0),
                 })
     pageWidth = p.rect.width
     pageHeight = p.rect.height
@@ -88,11 +91,34 @@ async def edit_batch(
         )
 
         if new_text.strip():
+            color_int = int(edit.get("color", 0))
+            r = ((color_int >> 16) & 255) / 255
+            g = ((color_int >> 8) & 255) / 255
+            b = (color_int & 255) / 255
+
+            flags = int(edit.get("flags", 0))
+            font_name = (edit.get("font") or "").lower()
+            is_bold   = bool(flags & 16) or "bold"   in font_name
+            is_italic = bool(flags & 2)  or "italic" in font_name or "oblique" in font_name
+            is_mono   = bool(flags & 8)  or "mono"   in font_name or "courier" in font_name
+            is_serif  = bool(flags & 4)  or "times"  in font_name or "serif"   in font_name or "roman" in font_name
+
+            if is_mono:
+                fontname = "cobo" if is_bold and is_italic else "cobi" if is_italic else "cob" if is_bold else "cour"
+                fontname = {"cobo":"cobo","cobi":"cobi","cob":"cob","cour":"cour"}[fontname]
+            elif is_serif:
+                fontname = "tibo" if is_bold and is_italic else "tibi" if is_italic else "tibo" if is_bold else "tiro"
+                fontname = "tibo" if is_bold else ("tibi" if is_italic else "tiro")
+            else:
+                fontname = "hebo" if is_bold and is_italic else "hebi" if is_italic else "hebo" if is_bold else "helv"
+                fontname = "hebo" if is_bold else ("hebi" if is_italic else "helv")
+
             p.insert_text(
                 (x, y1 - (y1 - y) * 0.15),
                 new_text,
                 fontsize=size,
-                color=(0, 0, 0)
+                fontname=fontname,
+                color=(r, g, b)
             )
 
     buf = doc.tobytes()
